@@ -217,4 +217,81 @@ execute below command to make sure that both of the above services are automatic
  chkconfig krb5kdc on
  chkconfig kadmin on
 ```
+### Test KDC Server
+
+We are finished with the installation. Now we need to test if KDC is correctly issuing tickets.
+The klist command shows the list of credentials in the cache. If I issue this command at this stage, it should show an empty list.
+
+```bash
+klist
+```
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/klist.png)
+
+The kinit command is used to obtain a ticket and store it in credential cache. Let’s try that and recheck klist command.
+
+```bash
+[root@host1 ~]# kinit root/admin@LOCAL
+Password for root/admin@LOCAL:
+
+[root@host1 ~]# klist
+Ticket cache: FILE:/tmp/krb5cc_0
+Default principal: root/admin@LOCAL
+
+Valid starting     Expires            Service principal
+11/25/16 01:00:32  11/26/16 01:00:32  krbtgt/LOCAL@LOCAL
+        renew until 11/25/16 01:00:32
+```
+
+Great, kinit will ask me for my password and get the ticket from KDC. the klist command shows information about the ticket that I received.
+
+## Kerberos on Cloudera Using Cloudera Manager
+Login to Cloudera Manager and navigate to the Administration tab on the top, Select security from the admin tab.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/KI1.png)
+
+The Security page for Cloudera Manager provides you with the option to Enable Kerberos on the any cluster that is configured with Cloudera Manger.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/KI2.png)
+
+Step 1: While setting up Kerberos on the cluster, Cloudera recommends some prerequisites which need to be fulfilled and few checklists which are to be completed.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/KI3.png)
+
+Step 2: Provide Cloudera Manager with KDC information and the KDC Server Host.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/KI4.png)
+
+Step 3: Check, if you want to manage the krb5.conf through Cloudera Manager.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/KI4a.png)
+
+Make changes to the krb5.conf as needed 
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/KI5.png)
+
+Step 4 : Enter the credentials for KDC Account manager.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/KI6.png)
+
+Step 5: If everything checks outm than CM will successfully import the KDC Account manager credentials.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/Ki7.png)
+
+Step 6: Specify the Kerberos principals used by each service in the cluster.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/KI8.png)
+
+Step 7: Configure Ports as required.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/KI9.png)
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/KI9a.png)
+
+Step 8: The Cluster will be restarted for Kerberos to take effect.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/KI10.png)
+
+Step 9: Kerberos has been successfully installed on the cluster.
+
+## Using Hadoop Services after Kerberos Installation
 
