@@ -386,3 +386,366 @@ $ sudo -u hdfs hdfs dfs -chown -R hive:hive /user/hive/warehouse
 ```bash
 allowed.system.users = nobody,impala,hive
 ```
+## Sentry Installation
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/SI1.png)
+Step 1: Click on the Actions tab and click Add Service.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/SI2.png)
+Step 2: Select the Sentry Service and Click Continue.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/SI3.png)
+Step 3: Configure the Sentry Server and the Gateway nodes for the Cluster and Click Continue.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/SI4.png)
+Step 4: Create a database for sentry to store its metadata and Policy information.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/SI5.png)
+Step 5: Cloudera Manager will run the Start command and complete the perquisites for Sentry.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/SI6.png)
+Step 6: Sentry Service has been successfully installed on the Cluster.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/SI7.png)
+Step 7: Enable Sentry for HDFS, by changing the values of ‘Enable Access Control Lists’ and ‘Enable Sentry Synchronization’ to true. 
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/SI8.png)
+Step 8: Enbale Sentry for Hive by setting the value of ‘Sentry Service = Sentry’ and disabling HiveServer2 Impersonation.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/SI9.png)
+Step 9: Deploy the Client Configurations which have been changed after the above values were modified.
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/SI10.png)
+Step 10: Restart the Cluster.
+
+## Sentry Architecture
+
+### Sentry Components
+
+![alt text](https://github.com/ankitbh09/Documents/blob/master/images/SA1.png)
+
+There are three components involved in the authorization process:
+
+**Sentry Server**
+The Sentry RPC server manages the authorization metadata. It supports interfaces to securely retrieve and manipulate the metadata.
+
+**Data Engine**
+This is a data processing application such as Hive or Impala that needs to authorize access to data or metadata resources. The data engine loads the Sentry plugin and all client requests for accessing resources are intercepted and routed to the Sentry plugin for validation.
+
+**Sentry Plugin**
+The Sentry plugin runs in the data engine. It offers interfaces to manipulate authorization metadata stored in the Sentry server, and includes the authorization policy engine that evaluates access requests using the authorization metadata retrieved from the server.
+
+### Key Concepts
+
+* Authentication - Verifying credentials to reliably identify a user
+* Authorization - Limiting the user’s access to a given resource
+* User - Individual identified by underlying authentication system
+* Group - A set of users, maintained by the authentication system
+* Privilege - An instruction or rule that allows access to an object
+* Role - A set of privileges; a template to combine multiple access rules
+* Authorization models - Defines the objects to be subject to authorization rules and the granularity of actions allowed. For example, in the SQL model, the objects can be databases or tables, and the actions are SELECT, INSERT, CREATE and so on. For the Search model, the objects are indexes, collections and documents; the access modes are query, update and so on.
+
+### User Identity Group Mapping
+
+Sentry relies on underlying authentication systems, such as Kerberos or LDAP, to identify the user. It also uses the Group mapping mechanism configured in Hadoop to ensure that Sentry sees the same group mapping as other components of the Hadoop ecosystem.
+
+Consider a sample organization with users Alice and Bob who belong to an Active Directory (AD) group called finance-department. Bob also belongs to a group called finance-managers. In Sentry, you first create roles and then grant privileges to these roles. For example, you can create a role called Analyst and grant SELECT on tables Customer and Sales to this role.
+
+The next step is to join these authentication entities (users and groups) to authorization entities (roles). This can be done by granting the Analyst role to the finance-department group. Now Bob and Alice who are members of the finance-department group get SELECT privilege to the Customer and Sales tables.
+
+### Role-Based Access Control
+
+Role-based access control (RBAC) is a powerful mechanism to manage authorization for a large set of users and data objects in a typical enterprise. New data objects get added or removed, users join, move, or leave organisations all the time. RBAC makes managing this a lot easier. Hence, as an extension of the sample organization discussed previously, if a new employee Carol joins the Finance Department, all you need to do is add her to the finance-department group in AD. This will give Carol access to data from the Sales and Customer tables.
+
+### Unified Authorization
+
+Another important aspect of Sentry is the unified authorization. The access control rules once defined, work across multiple data access tools. For example, being granted the Analyst role in the previous example will allow Bob, Alice, and others in the finance-department group to access table data from SQL engines such as Hive and Impala, as well as using MapReduce, Pig applications or metadata access using HCatalog.
+
+## Hive SQL Syntax for Use with Sentry
+
+Sentry permissions can be configured through Grant and Revoke statements issued either interactively or programmatically through the HiveServer2 SQL command line interface, Beeline. The syntax described below is very similar to the GRANT/REVOKE commands available in well-established relational database systems.
+
+### Column-Level Authorization
+
+CDH 5.5 introduces column-level access control for tables in Hive and Impala. Previously, Sentry supported privilege granularity only down to a table. Hence, if you wanted to restrict access to a column of sensitive data, the workaround would be to first create view for a subset of columns, and then grant privileges on that view. To reduce the administrative overhead associated with such an approach, Sentry now allows you to assign the SELECT privilege on a subset of
+columns in a table. 
+
+The following command grants a role the SELECT privilege on a column:
+```sql
+GRANT SELECT(column_name) ON TABLE table_name TO ROLE role_name;
+```
+
+The following command can be used to revoke the SELECT privilege on a column:
+```sql
+REVOKE SELECT(column_name) ON TABLE table_name FROM ROLE role_name;
+```
+
+Any new columns added to a table will be inaccessible by default, until explicitly granted access.
+
+**Actions allowed for users with SELECT privilege on a column:**
+
+Users whose roles have been granted the SELECT privilege on columns only, can perform operations which explicitly refer to those columns. Some examples are:
+```sql
+SELECT column_name FROM TABLE table_name;
+```
+
+In this case, Sentry will first check to see if the user has the required privileges to access the table. It will then further check to see whether the user has the SELECT privilege to access the column(s).
+```sql
+SELECT COUNT(column_name) FROM TABLE table_name;
+```
+
+Users are also allowed to use the COUNT function to return the number of values in the column.
+```sql
+SELECT column_name FROM TABLE table_name WHERE column_name <operator> GROUP BY column_name;
+```
+
+The above command will work as long as you refer only to columns to which you already have access.
+
+To list the column(s) to which the current user has SELECT access: 
+```sql
+SHOW COLUMNS;
+```
+
+**Exceptions:**
+
+* If a user has SELECT access to all columns in a table, the following command will work. Note that this is an exception, not the norm. In all other cases, SELECT on all columns does not allow you to perform table-level operations.
+```sql
+SELECT * FROM TABLE table_name;
+```
+
+* The DESCRIBE table command differs from the others, in that it does not filter out columns for which the user does not have SELECT access.
+
+```sql
+DESCRIBE (table_name);
+```
+
+**Limitations:**
+
+* Column-level privileges can only be applied to tables and partitions, not views.
+
+* HDFS-Sentry Sync: With HDFS-Sentry sync enabled, even if a user has been granted access to all columns of a table, they will not have access to the corresponding HDFS data files. This is because Sentry does not consider SELECT on all columns equivalent to explicitly being granted SELECT on the table.
+
+* Column-level access control for access from Spark SQL is not supported by the HDFS-Sentry plug-in.
+
+### CREATE ROLE Statement
+
+The CREATE ROLE statement creates a role to which privileges can be granted. Privileges can be granted to roles, which can then be assigned to users. A user that has been assigned a role will only be able to exercise the privileges of that role.
+
+Only users that have administrative privileges can create/drop roles. By default, the hive, impala and hue users have admin privileges in Sentry.
+
+```sql
+CREATE ROLE [role_name];
+```
+
+### DROP ROLE Statement
+
+The DROP ROLE statement can be used to remove a role from the database. Once dropped, the role will be revoked for all users to whom it was previously assigned. Queries that are already executing will not be affected. However, since Hive checks user privileges before executing each query, active user sessions in which the role has already been enabled will be affected.
+
+```sql
+DROP ROLE [role_name];
+```
+
+### GRANT ROLE Statement
+
+The GRANT ROLE statement can be used to grant roles to groups. Only Sentry admin users can
+
+```sql
+GRANT ROLE role_name [, role_name]
+TO GROUP <groupName> [,GROUP <groupName>]
+```
+
+### REVOKE ROLE Statement
+
+The REVOKE ROLE statement can be used to revoke roles from groups. Only Sentry admin users can revoke the role from a group.
+
+```sql
+REVOKE ROLE role_name [, role_name]
+FROM GROUP <groupName> [,GROUP <groupName>]
+```
+
+### GRANT <PRIVILEGE> Statement
+
+In order to grant privileges on an object to a role, the user must be a Sentry admin user.
+
+```sql
+GRANT
+<PRIVILEGE> [, <PRIVILEGE> ]
+ON <OBJECT> <object_name>
+TO ROLE <roleName> [,ROLE <roleName>]
+```
+
+With CDH 5.5, you can grant the SELECT privilege on specific columns of a table. For example:
+
+```sql
+GRANT SELECT(column_name) ON TABLE table_name TO ROLE role_name;
+```
+
+### REVOKE <PRIVILEGE> Statement
+
+Since only authorized admin users can create roles, consequently only Sentry admin users can revoke privileges from a group.
+
+```sql
+REVOKE
+<PRIVILEGE> [, <PRIVILEGE> ]
+ON <OBJECT> <object_name>
+FROM ROLE <roleName> [,ROLE <roleName>]
+```
+
+You can also revoke any previously-granted SELECT privileges on specific columns of a table. For example:
+
+```sql
+REVOKE SELECT(column_name) ON TABLE table_name FROM ROLE role_name;
+```
+
+### GRANT <PRIVILEGE> ... WITH GRANT OPTION
+
+With CDH 5.2, you can delegate granting and revoking privileges to other roles. For example, a role that is granted a privilege WITH GRANT OPTION can GRANT/REVOKE the same privilege to/from other roles. Hence, if a role has the ALL privilege on a database and the WITH GRANT OPTION set, users granted that role can execute GRANT/REVOKE statements only for that database or child tables of the database.
+
+```sql
+GRANT
+<PRIVILEGE>
+ON <OBJECT> <object_name>
+TO ROLE <roleName>
+WITH GRANT OPTION
+```
+
+Only a role with GRANT option on a specific privilege or its parent privilege can revoke that privilege from other roles.
+
+Once the following statement is executed, all privileges with and without grant option are revoked.
+
+```sql
+REVOKE
+<PRIVILEGE>
+ON <OBJECT> <object_name>
+FROM ROLE <roleName>
+```
+
+Hive does not currently support revoking only the WITH GRANT OPTION from a privilege previously granted to a role. To remove the WITH GRANT OPTION, revoke the privilege and grant it again without the WITH GRANT OPTION flag.
+
+### SET ROLE Statement
+
+The SET ROLE statement can be used to specify a role to be enabled for the current session. A user can only enable a role that has been granted to them. Any roles not listed and not already enabled are disabled for the current session.
+If no roles are enabled, the user will have the privileges granted by any of the roles that (s)he belongs to.
+
+* To enable a specific role:
+```sql
+SET ROLE <roleName>;
+```
+
+* To enable all roles:
+```sql
+SET ROLE ALL;
+```
+
+* No roles enabled:
+```sql
+SET ROLE NONE;
+```
+
+### SHOW STATMENT
+
+*  To list the database(s) for which the current user has database, table, or column-level access:
+```sql
+SHOW DATABASES;
+```
+
+* To list the table(s) for which the current user has table or column-level access:
+```sql
+SHOW TABLES;
+```
+
+*  To list the column(s) to which the current user has SELECT access:
+```sql
+SHOW COLUMNS;
+```
+
+* To list all the roles in the system (only for sentry admin users):
+```sql
+SHOW ROLES;
+```
+
+* To list all the roles in effect for the current user session:
+```sql
+SHOW CURRENT ROLES;
+```
+
+*  To list all the roles assigned to the given <groupName> (only allowed for Sentry admin users and others users that are part of the group specified by <groupName>):
+```sql
+SHOW ROLE GRANT GROUP <groupName>;
+```
+
+* The SHOW statement can also be used to list the privileges that have been granted to a role or all the grants given to a role for a particular object.
+To list all the grants for the given <roleName> (only allowed for Sentry admin users and other users that have
+been granted the role specified by <roleName>). The following command will also list any column-level privileges:
+```sql
+SHOW GRANT ROLE <roleName>;
+```
+
+* To list all the grants for a role on the given <objectName> (only allowed for Sentry admin users and other users that have been granted the role specified by <roleName>). The following command will also list any column-level privileges:
+```sql
+SHOW GRANT ROLE <roleName> on OBJECT <objectName>;
+```
+
+## Using Grant/Revoke Statements to Match an Existing Policy File
+
+**Note: In the following example(s), server1 refers to an alias Sentry uses for the associated Hive service. It does not refer to any physical server. This alias can be modified using the hive.sentry.server property in hive-site.xml. If you are using Cloudera Manager, modify the Hive property, Server Name for Sentry Authorization, in the Service-Wide > Advanced category.**
+
+Here is a sample policy file:
+
+```bash
+
+[groups]
+# Assigns each Hadoop group to its set of roles
+manager = analyst_role, junior_analyst_role
+analyst = analyst_role
+jranalyst = junior_analyst_role
+customers_admin = customers_admin_role
+admin = admin_role
+
+[roles] # The uris below define a define a landing skid which
+# the user can use to import or export data from the system.
+# Since the server runs as the user "hive" files in that directory
+# must either have the group hive and read/write set or
+# be world read/write.
+analyst_role = server=server1->db=analyst1, \
+server=server1->db=jranalyst1->table=*->action=select
+server=server1->uri=hdfs://ha-nn-uri/landing/analyst1 
+junior_analyst_role = server=server1->db=jranalyst1, \
+server=server1->uri=hdfs://ha-nn-uri/landing/jranalyst1
+
+# Implies everything on server1.
+admin_role = server=server1
+```
+
+The following sections show how you can use the new GRANT statements to assign privileges to roles (and assign roles to groups) to match the sample policy file above.
+
+**Grant privileges to admin_role:**
+
+```sql
+CREATE ROLE admin_role
+GRANT ALL ON SERVER server1 TO ROLE admin_role;
+```
+
+**Grant privileges to analyst_role:**
+```sql
+CREATE ROLE analyst_role;
+GRANT ALL ON DATABASE analyst1 TO ROLE analyst_role;
+GRANT SELECT ON DATABASE jranalyst1 TO ROLE analyst_role;
+GRANT ALL ON URI 'hdfs://ha-nn-uri/landing/analyst1' \
+TO ROLE analyst_role;
+```
+
+**Grant privileges to junior_analyst_role:**
+```sql 
+CREATE ROLE junior_analyst_role;
+GRANT ALL ON DATABASE jranalyst1 TO ROLE junior_analyst_role;
+GRANT ALL ON URI 'hdfs://ha-nn-uri/landing/jranalyst1' \
+TO ROLE junior_analyst_role;
+```
+
+**GRANT roles to group:**
+```sql
+GRANT ROLE admin_role TO GROUP admin;
+GRANT ROLE analyst_role TO GROUP analyst;
+GRANT ROLE jranalyst_role TO GROUP jranalyst;
+```
